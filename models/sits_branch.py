@@ -77,7 +77,7 @@ class SITSSegmenter(nn.Module):
         ]
 
         self.decoder_head = UPerHead(
-            self.backbone_dims,
+            self.backbone_dims, # [64, 128, 256]
             uper_head_dim,  # 512
             num_classes,
             pool_scales,
@@ -90,6 +90,8 @@ class SITSSegmenter(nn.Module):
         h, w = x.size()[-2:]
         red_temp_feats, enc_temp_feats = self.sits_encoder(x, batch_positions)
         
+        # print("backbone_dims:", self.backbone_dims)
+
         # print("red_temp_feats 0:", red_temp_feats[0].shape)
         # print("red_temp_feats 1:", red_temp_feats[1].shape)
         # print("red_temp_feats 2:", red_temp_feats[2].shape)

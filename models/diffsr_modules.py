@@ -52,23 +52,11 @@ class Unet(nn.Module):
         # into the same space as the input image.
         # Uses transposed convolutions to match spatial dimensions.
 
-        self.cond_proj = nn.ConvTranspose2d(
-            64,
-            dim,
-            int(hparams["inputs"]["sr_scale"])
-            * 2,  # Upsamples from 10×10 to 100×100 (10× scale), controls how many pixels around each point are considered when upsampling.
-            int(hparams["inputs"]["sr_scale"]),
-            int(hparams["inputs"]["sr_scale"]) // 2,
-        )
-
         # 1.3 Time Embedding (time_pos_emb)
         self.time_pos_emb = SinusoidalPosEmb(dim)
         self.mlp = nn.Sequential(
             nn.Linear(dim, dim * 4), Mish(), nn.Linear(dim * 4, dim)
         )
-        # print(" ------------------------------------------ dim:", dims)
-        # print(" ------------------------------------------ dim_mults:", dim_mults)
-
         self.downs = nn.ModuleList([])
         self.ups = nn.ModuleList([])
         num_resolutions = len(in_out)
@@ -172,55 +160,60 @@ class Unet(nn.Module):
         # Extract HR features for conditioning at multiple scales:
         if hr_img is not None:
             # hr_feats = self.extract_hr_feats(hr_img)
-            hr_feats = hr_img
-            hr_feats = [layer(f) for layer, f in zip(self.red_channels, hr_feats)]
+            hr_feats = [layer(f) for layer, f in zip(self.red_channels, hr_img)]
 
         else:
-            hr_feats = [None] * len(cond)
-
-        # print("cond 0:", cond[0].shape)
-        # print("cond 1:", cond[1].shape)
-        # print("cond 2:", cond[2].shape)
-        # print("cond 3:", cond[3].shape)
+            hr_feats = None
 
         # cond = self.upsample_to_target(cond)
 
         for i, (resnet, resnet2, downsample) in enumerate(self.downs):
             x = resnet(x, t)
             x = resnet2(x, t)
+
             # print()
             # print("i:", i)
             # print("x:", x.shape)
             # print("cond[i]:", cond[i].shape)
-            # the lowest resolution is not there!
-            if i != 3:
-                # print()
-                # print("i:", i)
-                # print("x:", x.shape)
-                # print("cond[i]:", cond[i].shape)
+            
+            # Features X from ResNet layers:
+            # torch.Size([2, 64, 64, 64]): 1.6 m GSD
+            # torch.Size([2, 128, 32, 32])  3.2 m GSD
+            # torch.Size([2, 256, 16, 16])  6.4 m GSD
+            # torch.Size([2, 512, 8, 8])  12.8 m GSD
+            
+            # Features cond from Cond Net:
+            # torch.Size([2, 64, 10, 10]): 10 m GSD
+            # torch.Size([2, 128, 5, 5])  30 m GSD
+            # torch.Size([2, 256, 3, 3]) 40 m GSD
+            # torch.Size([2, 512, 2, 2])  80 m GSD
 
-                # cond_i = self.super_patch_crop_and_upsample(cond[i], x)
-                # x = x.add_(cond_i)
+            # HR image Features
 
-                # Fuse LR and HR Conditioning
+            # torch.Size([1, 128, 64, 64]): 1.6 m GSD
+            # torch.Size([1, 256, 32, 32]): 3.2 m GSD
+            # torch.Size([1, 512, 16, 16]): 6.4 m GSD
 
-                # LR-SITS features  ----\
-                #                         ---> fused conditioning ---> U-Net
-                # HR image features ----/
+            # At each UNet downsampling layer, the cond net features are 
+            # upsample to match  the Features X from ResNet layers
+            
+            # Fuse LR and HR Conditioning
 
-                # So the model predicts:
-                # εθ = UNet(x_t , t , cond = [LR_features + HR_features])
+            cond_i = self.upsample_to_target(cond[i], x)
+            # print(" upsampled cond_i:", cond_i.shape)
+            # print(" hr_feats cond_i:", hr_feats)
 
-                cond_i = self.super_patch_crop_and_upsample(cond[i], x)
-
-                if hr_feats[i] is not None:
-                    hr_i = F.interpolate(
-                        hr_feats[i],
-                        size=x.shape[-2:],
-                        mode="bilinear",
-                        align_corners=False,
-                    )
-                    cond_i = cond_i + hr_i  # fuse LR and HR guidance
+            if hr_feats:
+                # hr_i = F.interpolate(
+                #     hr_feats[i],
+                #     size=x.shape[-2:],
+                #     mode="bilinear",
+                #     align_corners=False,
+                # )
+                # We do NOT have a HR feature at the last resolution: 12.8m GSD
+                # so the fusion with the LR feature is skipped!
+                if i < 3:
+                    cond_i = cond_i + hr_feats[i]  # fuse LR and HR guidance
 
                 x = x + cond_i
             h.append(x)

@@ -446,7 +446,8 @@ class PartitionAttentionLayer(nn.Module):
 
 class MaxVitLayer(nn.Module):
     """
-    MaxVit layer consisting of a MBConv layer followed by a PartitionAttentionLayer with `window` and a PartitionAttentionLayer with `grid`.
+    MaxVit layer consisting of a MBConv layer followed by a PartitionAttentionLayer
+      with `window` and a PartitionAttentionLayer with `grid`.
 
     Args:
         in_channels (int): Number of input channels.
@@ -839,7 +840,7 @@ class TConvFormer(nn.Module):
         """
         B, T, C, H, W = x.shape
         self.nbts = x.size(1)
-        # print("+++++++++++++++++++++++++++++++++++++++++++++++++++++")
+        
         # print("x:", x.shape)  #  torch.Size([2, 12, 4, 10, 10])
 
         # stem

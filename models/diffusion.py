@@ -214,17 +214,16 @@ class GaussianDiffusion(nn.Module):
 
 
     def apply_cond_hr_encoder(self, img_hr):
-        # Prevents PyTorch from tracking gradients, reducing memory
-        # usage and speeding up inference.
         _, _, res2, res3, res4 = self.aerial_net(img_hr)
-        # print("---------------Conditioning Temp Feats-------------------")
-        # print("cond 0:", cond[0].shape)
-        # print("cond 1:", cond[1].shape)
-        # print("cond 2:", cond[2].shape)
-        # # torch.Size([2, 64, 16, 16])
-        # # torch.Size([2, 64, 16, 16])
-        # # torch.Size([2, 64, 16, 16])
-        # print()
+        
+        # print("res2:", res2.shape)
+        # print("res3:", res3.shape)
+        # print("res4:", res4.shape)
+
+        # res2: torch.Size([1, 128, 64, 64]): 1.6 m GSD
+        # res3: torch.Size([1, 256, 32, 32]): 3.2 m GSD
+        # res4: torch.Size([1, 512, 16, 16]): 6.2 m GSD
+
         return [res2, res3, res4]
 
     # TRAINING STEP
@@ -259,6 +258,16 @@ class GaussianDiffusion(nn.Module):
         # encoded with HighResnet-LTAE temporal encoder
 
         cond_net_out, _, _, cond = self.cond_net(img_lr, dates)
+
+        # print("cond 0:", cond[0].shape)
+        # print("cond 1:", cond[1].shape)
+        # print("cond 2:", cond[2].shape)
+        # print("cond 3:", cond[3].shape)
+
+        # cond 0: torch.Size([2, 12, 64, 10, 10]): 10 m GSD
+        # cond 1: torch.Size([2, 12, 128, 5, 5]): 20 m GSD
+        # cond 2: torch.Size([2, 12, 256, 3, 3]): 40 m GSD
+        # cond 3: torch.Size([2, 12, 512, 2, 2]): 80 m GSD
 
         # cond: shape (B, T, C, H, W) where T is the number of time steps
         # img_lr_up: shape (B, T, C, H, W) where T is the number of time steps
@@ -522,14 +531,14 @@ class GaussianDiffusion(nn.Module):
         img,
         img_lr,  # low-resolution image used for conditioning
         img_lr_up,  # upsampled LR image used for upsampling the noisy image
-        hr_img,  # shape of the output image
+        img_hr,  # shape of the output image
         save_intermediate=False,
         dates=None,
         config=None,
         alphas=None,
     ):
         device = self.betas.device
-        b = hr_img.shape[0]
+        b = img_hr.shape[0]
 
         # 1. The image is initialized using the forward diffusion process (q)
         # by default res = True, so the image is initialized as randomly distributed noise
@@ -542,11 +551,11 @@ class GaussianDiffusion(nn.Module):
             # perfoming the forward pass process allows us to gradually add noise to the
             # image until we reach the desired level of randomness.
             # The resulting image can then be used as an initial guess for the reverse diffusion process.
-            img = self.q_sample(img_lr_up, t)
+            img_ = self.q_sample(img_lr_up, t)
         else:
             # torch.manual_seed(1234)
             # the image is initialized as a random noise
-            img = torch.randn(hr_img.shape, device=device)
+            img_ = torch.randn(img_hr.shape, device=device)
 
         # 2. Conditioning on the low resolution image
         # We encode the low-resolution image ONLY once
@@ -556,7 +565,7 @@ class GaussianDiffusion(nn.Module):
         cond_net_out, _, _, cond = self.cond_net(img_lr, dates)
         
         # HR conditioning 
-        hr_cond = self.apply_cond_hr_encoder(img)
+        cond_hr = self.apply_cond_hr_encoder(img)
 
         # 3. Iterates over the time steps from the reverse diffusion process
         it = reversed(range(0, self.num_timesteps))  # num_timesteps: 500
@@ -594,20 +603,20 @@ class GaussianDiffusion(nn.Module):
                 # In diffusion models, you don’t just want the network's prediction of x_0
                 # you want to sample from the model’s learned distribution p(x_0).
 
-                img, x_recon = self.p_sample(
-                    img,  # x_t
+                img_, x_recon = self.p_sample(
+                    img_,  # x_t
                     torch.full((b,), j, device=device, dtype=torch.long),  # t
                     [feat[:, i] for feat in cond],  # x_e
-                    hr_cond, # for conditioning
+                    cond_hr, # for conditioning
                     # img_lr_up[:, i, :, :],
                 )
                 if save_intermediate:
-                    img_ = self.res2img(img, img_lr_up[:, i, :, :])
+                    img_ = self.res2img(img_, img_lr_up[:, i, :, :])
                     x_recon_ = self.res2img(x_recon, img_lr_up[:, i, :, :])
                     images.append((img_.cpu(), x_recon_.cpu()))
 
             # 4. The final image is reconstructed using the res2img method
-            img_sr = self.res2img(img, img_lr_up[:, i, :, :])
+            img_sr = self.res2img(img_, img_lr_up[:, i, :, :])
             img_sr_ts_outs.append(img_sr)
 
         img_sr = torch.stack(img_sr_ts_outs, 1)

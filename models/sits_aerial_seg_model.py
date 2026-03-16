@@ -84,6 +84,10 @@ class SITSAerialSegmenter(nn.Module):
         # Replace the old conv with the new one
         self.aerial_net.stem.conv1 = new_conv
 
+
+        # give latent_diff access
+        self.gaussian.aerial_net = self.aerial_net
+
         encoder_channels = [
             config["models"]["t_convformer"]["embed_dim"],
             config["models"]["t_convformer"]["embed_dim"] * 2,
