@@ -49,8 +49,6 @@ def set_hparams(
         parser.add_argument("--validate", action="store_true", help="validate")
         parser.add_argument("--reset", action="store_true", help="reset hparams")
         parser.add_argument("--debug", action="store_true", help="debug")
-        parser.add_argument("--resume", action="store_true", help="resume")
-
         args, unknown = parser.parse_known_args()
         print("| Unknow hparams: ", unknown)
     else:
@@ -63,8 +61,6 @@ def set_hparams(
             validate=False,
             reset=False,
             debug=False,
-            resume=False,
-
         )
     global hparams
     assert args.config != "" or args.config_file != "" or args.exp_name != ""
@@ -97,10 +93,39 @@ def set_hparams(
         config_chains.append(config_fn)
         return ret_hparams
 
+    def load_config(path: str) -> Dict[str, dict]:
+        """
+        Reads and combines YAML configuration(s) from a file or all files in a directory.
+        Args:
+            path (str): Path to a single YAML file or a directory containing YAML files.
+        Returns:
+            Dict[str, dict]: A combined dictionary with the contents of the YAML file(s).
+        """
+        combined_config = {}
+
+        if os.path.isfile(path) and path.endswith(".yaml"):
+            with open(path, "r") as f:
+                config = yaml.safe_load(f)
+                if isinstance(config, dict):
+                    combined_config.update(config)
+        elif os.path.isdir(path):
+            for file_name in os.listdir(path):
+                if file_name.endswith(".yaml"):
+                    file_path = os.path.join(path, file_name)
+                    with open(file_path, "r") as f:
+                        config = yaml.safe_load(f)
+                        if isinstance(config, dict):
+                            combined_config.update(config)
+        else:
+            raise ValueError(
+                f"Invalid path: {path}. Must be a .yaml file or a directory containing .yaml files."
+            )
+
+        return combined_config
+
     saved_hparams = {}
     hparams.update(load_config(args.config_file))
     args_work_dir = hparams["paths"]["out_folder"]
-
     if args.exp_name != "":
         args_work_dir = str(args_work_dir) + f"checkpoints/{args.exp_name}"
         ckpt_config_path = f"{args_work_dir}/config.yaml"
@@ -149,7 +174,6 @@ def set_hparams(
 
     hparams_["infer"] = args.infer
     hparams_["debug"] = args.debug
-    hparams_["resume"] = args.resume
     hparams_["validate"] = args.validate
     hparams_["exp_name"] = args.exp_name
     hparams_["config_file"] = args.config_file

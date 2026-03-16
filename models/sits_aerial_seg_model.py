@@ -37,7 +37,8 @@ class SITSAerialSegmenter(nn.Module):
             config=config,
         )
 
-        if not hparams["resume"] and not hparams["infer"]:
+        if not hparams["infer"]:
+        # if not hparams["resume"] and not hparams["infer"]:
             if hparams["cond_net_ckpt"] != "" and os.path.exists(hparams["cond_net_ckpt"]):
                 weights_path = hparams["cond_net_ckpt"]
                 if torch.cuda.is_available():

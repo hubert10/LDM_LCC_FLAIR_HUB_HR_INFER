@@ -61,8 +61,8 @@ class SRDiffTrainer(Trainer):
             d_model=hparams["models"]["t_convformer"]["d_model"],
             config=hparams,
         )
-
-        if not hparams["resume"] and not hparams["infer"]:
+        if not hparams["infer"]:
+        # if not hparams["resume"] and not hparams["infer"]:
             if hparams["cond_net_ckpt"] != "" and os.path.exists(hparams["cond_net_ckpt"]):
                 weights_path = hparams["cond_net_ckpt"]
                 if torch.cuda.is_available():
