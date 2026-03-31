@@ -457,9 +457,6 @@ class DDPM(nn.Module):
             x_sr = self.decode_first_stage_with_grad(x0_pred)
             # x_sr: torch.Size([2, 4, 64, 64]
 
-            print("model_output:", model_output.shape)
-            print("x_sr:", x_sr.shape)
-
             model_outputs.append(model_output)
             sr_outputs.append(x_sr)
 
