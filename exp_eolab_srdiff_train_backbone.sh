@@ -19,4 +19,4 @@ export DATA_DIR
 source /home/eouser/flair_venv/bin/activate
 which python
 cd $HOME/exp_2026/LDM_LCC_FLAIR_HUB_HR_INFER
-python trainer.py --config_file=./configs/train_main/ --exp_name misr/srdiff_maxvit_ltae_ckpt --reset
+python trainer.py --config_file=./configs/train_main/ --exp_name srdiff_maxvit_ltae_ckpt --reset
