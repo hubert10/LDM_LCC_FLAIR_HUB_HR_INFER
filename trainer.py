@@ -456,7 +456,7 @@ class Trainer:
                 img_lr = batch["img_lr"]
                 img_lr_up = batch["img_lr_up"]
                 dates = batch["dates"]
-                
+
                 img_sr, preds, ret, _ = self.sample_and_test(batch)
 
                 if img_sr is not None:

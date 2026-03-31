@@ -22,7 +22,7 @@ class SITSAerialSegmenter(nn.Module):
             config["models"]["t_convformer"]["embed_dim"] * 2**i
             for i in range(len(config["models"]["t_convformer"]["depths"]))
         ]
-        
+
         # =========================
         # 1. SR-SITS Encoder
         # =========================
@@ -32,8 +32,12 @@ class SITSAerialSegmenter(nn.Module):
                 hparams["inputs"]["sr_patch_size"],
             ),
             stem_channels=64,
-            block_channels=hparams["models"]["t_convformer"]["block_channels"],  # [64, 128, 256, 512]
-            block_layers=hparams["models"]["t_convformer"]["block_layers"],  # [2, 2, 5, 2]
+            block_channels=hparams["models"]["t_convformer"][
+                "block_channels"
+            ],  # [64, 128, 256, 512]
+            block_layers=hparams["models"]["t_convformer"][
+                "block_layers"
+            ],  # [2, 2, 5, 2]
             head_dim=32,
             stochastic_depth_prob=0.2,
             partition_size=hparams["models"]["maxvit"]["window_cond_size"],
@@ -50,7 +54,7 @@ class SITSAerialSegmenter(nn.Module):
         # =========================
         # 2. Aerial Encoder (MaxViT)
         # =========================
-        
+
         self.aer_net_enc = timm.create_model(
             "maxvit_tiny_tf_512.in1k",
             pretrained=True,
@@ -63,7 +67,7 @@ class SITSAerialSegmenter(nn.Module):
 
         # Share encoder with latent diffusion module
         self.latent_diff.aer_net_enc = self.aer_net_enc
-        
+
         # =========================
         # 3. Decoders
         # =========================
@@ -88,7 +92,7 @@ class SITSAerialSegmenter(nn.Module):
             config["models"]["t_convformer"]["uper_head_dim"],  # 512
             config["inputs"]["num_classes"],
             config["models"]["t_convformer"]["pool_scales"],
-            dropout_ratio=0.1
+            dropout_ratio=0.1,
         )
 
         # 4. Aerial Decoder from U-Net Former paper
@@ -143,7 +147,6 @@ class SITSAerialSegmenter(nn.Module):
         """Load checkpoint and extract state_dict."""
         ckpt = torch.load(path, map_location="cpu")
         return ckpt["state_dict"] if "state_dict" in ckpt else ckpt
-
 
     def load_pretrained_weights(self, model, weights_path):
         print(f"\nLoading pretrained weights from: {weights_path}")

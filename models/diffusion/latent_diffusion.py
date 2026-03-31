@@ -907,7 +907,7 @@ class LatentDiffusion(DDPM):
             return_ids (bool): Whether to return the IDs of the diffusion process.
 
         Returns:
-            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: The output tensor, 
+            Union[torch.Tensor, Tuple[torch.Tensor, torch.Tensor]]: The output tensor,
             and optionally the IDs of the diffusion process.
             returns a latent, which is then used for loss computation
             So the loss is computed directly on the latent space, not the decoded image.
@@ -1229,7 +1229,6 @@ class LatentDiffusion(DDPM):
 
         self.model.load_state_dict(weights, strict=True)
         print("Loaded pretrained weights from: ", weights_file)
-
 
     @torch.no_grad()
 

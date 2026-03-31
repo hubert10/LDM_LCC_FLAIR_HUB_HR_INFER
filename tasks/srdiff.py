@@ -77,8 +77,12 @@ class SRDiffTrainer(Trainer):
             ),
             stem_channels=64,
             partition_size=hparams["models"]["maxvit"]["window_cond_size"],
-            block_channels=hparams["models"]["t_convformer"]["block_channels"],  # [128, 256, 512],  # [64, 128, 256, 512]
-            block_layers=hparams["models"]["t_convformer"]["block_layers"],  # [2, 2, 5],  # [2, 2, 5, 2]
+            block_channels=hparams["models"]["t_convformer"][
+                "block_channels"
+            ],  # [128, 256, 512],  # [64, 128, 256, 512]
+            block_layers=hparams["models"]["t_convformer"][
+                "block_layers"
+            ],  # [2, 2, 5],  # [2, 2, 5, 2]
             head_dim=32,
             stochastic_depth_prob=0.2,
         )
@@ -93,7 +97,6 @@ class SRDiffTrainer(Trainer):
             and not hparams["infer"]
         ):
             self.load_pretrained_weights(self.cond_net, hparams["cond_net_ckpt"])
-
 
         # 3. Latent Diff Model
 
