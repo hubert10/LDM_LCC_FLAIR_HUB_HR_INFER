@@ -106,6 +106,7 @@ class SRDiffTrainer(Trainer):
             first_stage_config=first_stage_config,
             cond_stage_config=cond_stage_config,
             timesteps=hparams["timesteps"],
+            scale_factor=hparams["scale_factor"]
         )
 
         # 4. CLS Net

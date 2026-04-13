@@ -23,6 +23,7 @@ use_rrdb_ltae: false
 misr_ref_image: closest
 misr: true
 sr_scale: 6.25
+scale_factor: 0.1821
 
 main_loss_weight: 1.0
 

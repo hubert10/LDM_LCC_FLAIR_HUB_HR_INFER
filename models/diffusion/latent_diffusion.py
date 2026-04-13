@@ -260,26 +260,6 @@ class DDPM(nn.Module):
         self.register_buffer("lvlb_weights", lvlb_weights, persistent=False)
         assert not torch.isnan(self.lvlb_weights).all()
 
-    def get_input(self, batch: Dict[str, torch.Tensor], k: str) -> torch.Tensor:
-        """
-        Gets the input from the DataLoader and rearranges it.
-
-        Args:
-            batch (Dict[str, torch.Tensor]): The batch of data from the DataLoader.
-            k (str): The key for the input tensor in the batch.
-
-        Returns:
-            torch.Tensor: The input tensor, rearranged and converted to float.
-        """
-
-        x = batch[k]
-        if len(x.shape) == 3:
-            x = x[..., None]
-
-        x = x.to(memory_format=torch.contiguous_format).float()
-
-        return x
-
     @contextmanager
     def ema_scope(self, context: Optional[str] = None) -> Generator[None, None, None]:
         """
@@ -433,7 +413,7 @@ class DDPM(nn.Module):
 
         return loss
 
-    def p_losses(self, x_start, cond, x, img_lr, closest_idx, t, noise=None):
+    def p_losses(self, x_start, t, cond, x, img_lr, closest_idx, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
 
@@ -750,142 +730,6 @@ class LatentDiffusion(DDPM):
             c = getattr(self.cond_stage_model, self.cond_stage_forward)(c)
         return c
 
-    def get_input(
-        self,
-        batch: torch.Tensor,
-        k: int,
-        return_first_stage_outputs: bool = False,
-        force_c_encode: bool = False,
-        cond_key: Optional[str] = None,
-        return_original_cond: bool = False,
-        bs: Optional[int] = None,
-    ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]:
-        """
-        Returns the input tensor for the given batch and timestep.
-
-        z is the latent representation of the HR image
-        This z becomes x_start in p_losses
-
-        Args:
-            batch (torch.Tensor): The input batch tensor.
-            k (int): The timestep.
-            return_first_stage_outputs (bool): Whether to return the outputs of the first stage of the model.
-            force_c_encode (bool): Whether to force encoding of the conditioning tensor.
-            cond_key (Optional[str]): The key for the conditioning tensor.
-            return_original_cond (bool): Whether to return the original conditioning tensor.
-            bs (Optional[int]): The batch size.
-
-        Returns:
-            Tuple[torch.Tensor, Optional[torch.Tensor], Optional[torch.Tensor]]: The input tensor, the outputs of the
-            first stage of the model (if `return_first_stage_outputs` is `True`), and the encoded conditioning tensor
-            (if `force_c_encode` is `True` and `cond_key` is not `None`).
-        """
-
-        # k = first_stage_key on this SR example
-        x = super().get_input(batch, k)  # line 333
-
-        if bs is not None:
-            x = x[:bs]
-        x = x.to(self.device)
-
-        # perform always for HR and for HR only of SISR
-        if self.sr_type == "SISR" or k == "image":
-            encoder_posterior = self.encode_first_stage(x)
-            z = self.get_first_stage_encoding(encoder_posterior).detach()
-
-        if self.model.conditioning_key is not None:
-            # self.model.conditioning_key = "image" in SR example
-
-            if cond_key is None:
-                cond_key = self.cond_stage_key
-
-            if cond_key != self.first_stage_key:
-                if cond_key in ["caption", "coordinates_bbox"]:
-                    xc = batch[cond_key]
-                elif cond_key == "class_label":
-                    xc = batch
-                else:
-                    xc = super().get_input(batch, cond_key).to(self.device)
-            else:
-                xc = x
-            if not self.cond_stage_trainable or force_c_encode:
-                # print("++++++++++++++++++++++++++++++++++++++++++++++")
-                # print("++++++++++++++++++++++++++++++++++++++++++++++", self.cond_stage_trainable)
-                # print("++++++++++++++++++++++++++++++++++++++++++++++", force_c_encode)
-
-                if isinstance(xc, dict) or isinstance(xc, list):
-                    # import pudb; pudb.set_trace()
-                    c = self.get_learned_conditioning(xc)
-                else:
-                    c = self.get_learned_conditioning(xc.to(self.device))
-            else:
-                c = xc
-            if bs is not None:
-                c = c[:bs]
-
-            # BUG if use_positional_encodings is True
-            if self.use_positional_encodings:
-                pos_x, pos_y = self.compute_latent_shifts(batch)
-                ckey = __conditioning_keys__[self.model.conditioning_key]
-                c = {ckey: c, "pos_x": pos_x, "pos_y": pos_y}
-
-        else:
-            c = None
-            xc = None
-            if self.use_positional_encodings:
-                pos_x, pos_y = self.compute_latent_shifts(batch)
-                c = {"pos_x": pos_x, "pos_y": pos_y}
-        out = [z, c]
-
-        if return_first_stage_outputs:
-            # Important: For training loss computation, the decoded image is NOT used.
-            xrec = self.decode_first_stage(z)
-            out.extend([x, xrec])
-        if return_original_cond:
-            out.append(xc)
-        return out
-
-    def compute(
-        self, example: torch.Tensor, custom_steps: int = 200, temperature: float = 1.0
-    ) -> torch.Tensor:
-        """
-        Performs inference on the given example tensor.
-
-        Args:
-            example (torch.Tensor): The example tensor.
-            custom_steps (int): The number of steps to perform.
-            temperature (float): The temperature to use.
-
-        Returns:
-            torch.Tensor: The output tensor.
-        """
-        guider = None
-        ckwargs = None
-        ddim_use_x0_pred = False
-        temperature = temperature
-        eta = 1.0
-        custom_shape = None
-
-        if hasattr(self, "split_input_params"):
-            delattr(self, "split_input_params")
-
-        logs = make_convolutional_sample(
-            example,
-            self,
-            custom_steps=custom_steps,
-            eta=eta,
-            quantize_x0=False,
-            custom_shape=custom_shape,
-            temperature=temperature,
-            noise_dropout=0.0,
-            corrector=guider,
-            corrector_kwargs=ckwargs,
-            x_T=None,
-            ddim_use_x0_pred=ddim_use_x0_pred,
-        )
-
-        return logs["sample"]
-
     def apply_model(
         self,
         x_noisy: torch.Tensor,
@@ -1096,36 +940,14 @@ class LatentDiffusion(DDPM):
         ).long()  # self.num_timesteps = 500
 
         loss, model_outputs = self.p_losses(
-            z, cond, x, img_lr, closest_idx, t, *args, **kwargs
+            z, cond, t, x, img_lr, closest_idx, *args, **kwargs
         )
         losses = {"sr": loss}
         return losses, model_outputs
 
-    def _tensor_encode(self, X: torch.Tensor):
-        # encodes HR image during inferences
-        # set copy to model
-        self._X = X.clone()
-        # encode LR images
-        X_enc = self.first_stage_model.encode(X).sample()
-        # move to same device as the model
-        X_enc = X_enc.to(self.device)
-        return X_enc
-
-    def _tensor_decode(self, X_enc: torch.Tensor, spe_cor: bool = True):
-        # Decode
-        X_dec = self.decode_first_stage(X_enc)
-        X_dec = self.linear_transform(X_dec, stage="denorm")
-        # Apply spectral correction
-        if spe_cor:
-            for i in range(X_dec.shape[1]):
-                X_dec[:, i] = self.hq_histogram_matching(X_dec[:, i], self._X[:, i])
-        # If the value is negative, set it to 0
-        X_dec[X_dec < 0] = 0
-        return X_dec
 
     def _prepare_model(
         self,
-        X: torch.Tensor,
         eta: float = 1.0,
         custom_steps: int = 100,
         verbose: bool = False,
@@ -1137,35 +959,12 @@ class LatentDiffusion(DDPM):
         # make schedule to compute alphas and sigmas
         ddim.make_schedule(ddim_num_steps=custom_steps, ddim_eta=eta, verbose=verbose)
 
-        # Create the HR latent image
-        latent = torch.randn(X.shape, device=X.device)
-
         # Create the vector with the timesteps
         timesteps = ddim.ddim_timesteps
         time_range = np.flip(timesteps)
 
-        return ddim, latent, time_range
+        return ddim, time_range
 
-    def _attribution_methods(
-        self,
-        X: torch.Tensor,
-        grads: torch.Tensor,
-        attribution_method: Literal[
-            "grad_x_input", "max_grad", "mean_grad", "min_grad"
-        ],
-    ):
-        if attribution_method == "grad_x_input":
-            return torch.norm(grads * X, dim=(0, 1))
-        elif attribution_method == "max_grad":
-            return grads.abs().max(dim=0).max(dim=0)
-        elif attribution_method == "mean_grad":
-            return grads.abs().mean(dim=0).mean(dim=0)
-        elif attribution_method == "min_grad":
-            return grads.abs().min(dim=0).min(dim=0)
-        else:
-            raise ValueError(
-                "The attribution method must be one of: grad_x_input, max_grad, mean_grad, min_grad"
-            )
 
     def hq_histogram_matching(
         self, image1: torch.Tensor, image2: torch.Tensor
@@ -1250,13 +1049,17 @@ class LatentDiffusion(DDPM):
         cond = self.apply_cond_lr_encoder(img_lr, dates)
         cond_hr = self.apply_cond_hr_encoder(img)
 
-        img_hr = img_hr.clone()
-        Xnorm = self._tensor_encode(img_hr)
+        # Assert shape, size, dimensionality
+        shape = img_hr.shape  # torch.Size([1, 4, 64, 64])
+        latent_shape = (shape[0], shape[1], shape[2] // 4, shape[3] // 4)
 
-        # ddim, latent noisy random image and time_range
-        ddim, latent, time_range = self._prepare_model(
-            X=Xnorm, eta=eta, custom_steps=custom_steps, verbose=verbose
+        # Create the HR latent image
+        latent = torch.randn(latent_shape, device=img_hr.device)
+
+        # ddim, latent and time_range
+        ddim, time_range = self._prepare_model(eta=eta, custom_steps=custom_steps, verbose=verbose
         )
+
         iterator = tqdm(
             time_range, desc="DDIM Sampler", total=custom_steps, disable=True
         )
@@ -1285,12 +1088,12 @@ class LatentDiffusion(DDPM):
 
                 if save_iterations:
                     save_iters.append(
-                        self._tensor_decode(latent, spe_cor=histogram_matching)
+                        self.decode_first_stage(latent)
                     )
             if save_iterations:
                 return save_iters
 
-            sr = self._tensor_decode(latent, spe_cor=histogram_matching)
+            sr = self.decode_first_stage(latent)
             sr_images.append(sr)
         img_sr = torch.stack(sr_images, 1)  # torch.Size([2, 4, 4, 64, 64]
 
