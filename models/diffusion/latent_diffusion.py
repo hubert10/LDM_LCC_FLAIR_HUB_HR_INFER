@@ -940,7 +940,7 @@ class LatentDiffusion(DDPM):
         ).long()  # self.num_timesteps = 500
 
         loss, model_outputs = self.p_losses(
-            z, cond, t, x, img_lr, closest_idx, *args, **kwargs
+            z, t, cond, x, img_lr, closest_idx, *args, **kwargs
         )
         losses = {"sr": loss}
         return losses, model_outputs
