@@ -34,7 +34,7 @@ gray_value_px_loss_weight: 1.0
 
 
 timesteps: 500
-ddim_infer_steps: 20
+ddim_infer_steps: 100
 
 # 1. pixel: 1.0
 
