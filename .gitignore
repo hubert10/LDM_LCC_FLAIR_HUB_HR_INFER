@@ -129,6 +129,9 @@ pip-delete-this-directory.txt
 # Dropbox
 .dropbox.attr
 
+# internal scripts
+scripts.txt
+
 # Jupyter Notebook
 .ipynb_checkpoints
 

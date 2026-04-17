@@ -705,9 +705,9 @@ def display_wow_samples(
         mk = convert_to_color(mk[0], palette=palette)
 
     sen = np.load(sen_idx)
-    print("---------------------------data:", sen.shape)
+    # print("---------------------------data:", sen.shape)
     sen = sen[20, [2, 1, 0], :, :] / 2000
-    print("---------------------------data:", sen.shape)
+    # print("---------------------------data:", sen.shape)
 
     sen_spatch = sen[
         :,

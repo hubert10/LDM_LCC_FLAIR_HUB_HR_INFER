@@ -415,7 +415,6 @@ class DDPM(nn.Module):
 
     def p_losses(self, x_start, t, cond, x, img_lr, closest_idx, noise=None):
         noise = default(noise, lambda: torch.randn_like(x_start))
-        x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
 
         model_outputs = []
         sr_outputs = []
@@ -424,6 +423,9 @@ class DDPM(nn.Module):
         #  image (x0_pred) and the predicted noise for each time step
 
         for tps in range(cond[0].shape[1]):
+
+            x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
+
             # latent prediction from diffisuion model: model_output is predicted noisy
             model_output = self.apply_model(x_noisy, t, [feat[:, tps] for feat in cond])
             # model_output: torch.Size([2, 4, 16, 16])
@@ -592,10 +594,6 @@ class LatentDiffusion(DDPM):
             self.register_buffer("scale_factor", torch.tensor(scale_factor))
 
         self.cond_stage_forward = cond_stage_forward
-
-        # Set Fusion parameters (SIMON)
-        # TODO: We only have SISR parameters
-        self.sr_type = "SISR"
 
         # Setup the AutoencoderKL model
         embed_dim = first_stage_config[
@@ -858,32 +856,16 @@ class LatentDiffusion(DDPM):
         return fold, unfold, normalization, weighting
 
     def apply_cond_lr_encoder(self, img_lr, dates):
-        # Prevents PyTorch from tracking gradients, reducing memory
-        # usage and speeding up inference.
         _, cond = self.cond_net(img_lr, dates)
-        # print("---------------Conditioning Temp Feats-------------------")
-        # print("cond 0:", cond[0].shape)
-        # print("cond 1:", cond[1].shape)
-        # print("cond 2:", cond[2].shape)
-        # # torch.Size([2, 64, 16, 16])
-        # # torch.Size([2, 64, 16, 16])
-        # # torch.Size([2, 64, 16, 16])
-        # print()
+        cond = [cond * self.scale_factor for cond in cond] # scaling the cond features
+        # cond = [cond * self.scale_factor for cond in cond] # scaling the cond features
         return cond
 
     def apply_cond_hr_encoder(self, img_hr):
-        # Prevents PyTorch from tracking gradients, reducing memory
-        # usage and speeding up inference.
         _, _, res2, res3, res4 = self.aer_net_enc(img_hr)
-        # print("---------------Conditioning Temp Feats-------------------")
-        # print("cond 0:", cond[0].shape)
-        # print("cond 1:", cond[1].shape)
-        # print("cond 2:", cond[2].shape)
-        # # torch.Size([2, 64, 64, 64])
-        # # torch.Size([2, 128, 32, 32])
-        # # torch.Size([2, 256, 16, 16])
-        # print()
-        return [res2, res3, res4]
+        cond_hr = [res2, res3, res4]
+        cond_hr = [cond * self.scale_factor for cond in cond_hr] # scaling the cond features
+        return cond_hr
 
     def closest_lr_sits_aer(self, img_lr, closest_indices):
         B, T, C, H, W = img_lr.shape
@@ -1053,9 +1035,6 @@ class LatentDiffusion(DDPM):
         shape = img_hr.shape  # torch.Size([1, 4, 64, 64])
         latent_shape = (shape[0], shape[1], shape[2] // 4, shape[3] // 4)
 
-        # Create the HR latent image
-        latent = torch.randn(latent_shape, device=img_hr.device)
-
         # ddim, latent and time_range
         ddim, time_range = self._prepare_model(eta=eta, custom_steps=custom_steps, verbose=verbose
         )
@@ -1073,6 +1052,9 @@ class LatentDiffusion(DDPM):
             # Iterate over the timesteps
             if save_iterations:
                 save_iters = []
+
+            # Create the HR latent image
+            latent = torch.randn(latent_shape, device=img_hr.device)
 
             for i, step in enumerate(iterator):
                 outs = ddim.p_sample_ddim(

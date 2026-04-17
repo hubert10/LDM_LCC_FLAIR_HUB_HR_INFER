@@ -607,17 +607,3 @@ if __name__ == "__main__":
     else:
         trainer.test()
         trainer.generate_metrics()
-
-
-# Contributions:
-
-# python trainer.py --config_file=./configs/train_cond/ --exp_name misr/highresnet_ltae_ckpt --hparams="cond_net_ckpt=./results/checkpoints/misr/highresnet_ltae_ckpt" --reset
-
-# python trainer.py --config_file=./configs/train/ --exp_name misr/srdiff_maxvit_ltae_ckpt --reset
-
-# python trainer.py --config_file=./configs/train_main/ --exp_name misr/srdiff_highresnet_ltae_ckpt --hparams="cond_net_ckpt=./results/checkpoints/misr/srdiff_highresnet_ltae_ckpt" --infer
-
-
-# scp -r D:\kanyamahanga\Datasets\FLAIR_HUB\data nhgnkany@transfer.cluster.uni-hannover.de:/bigwork/nhgnkany/FLAIR_HUB
-
-# scp -r "D:/kanyamahanga/Datasets/FLAIR_HUB/data/*" nhgnkany@transfer.cluster.uni-hannover.de:/bigwork/nhgnkany/FLAIR_HUB/
